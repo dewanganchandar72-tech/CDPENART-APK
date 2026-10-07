@@ -1,0 +1,86 @@
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.2  
+
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'membership_screen.dart'; // Tera membership screen file
+
+class MembershipCheckWrapper extends StatefulWidget {
+  const MembershipCheckWrapper({super.key});
+
+  @override
+  State<MembershipCheckWrapper> createState() => _MembershipCheckWrapperState();
+}
+
+class _MembershipCheckWrapperState extends State<MembershipCheckWrapper> {
+  bool _isLoading = true;
+  bool _isExpired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkMembershipStatus();
+  }
+
+  Future<void> _checkMembershipStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Check karo ki membership activation date save hai ya nahi
+    String? activationDateStr = prefs.getString('membership_date');
+    
+    if (activationDateStr == null) {
+      // Agar pehli baar app khul raha hai ya date save nahi hai, toh expiry maan lo ya date set kar do
+      // Testing ke liye filhal hum ise expired maan kar membership screen dikha sakte hain ya free access de sakte hain
+      setState(() {
+        _isExpired = true; // Yahan true matlab membership screen dikhegi
+        _isLoading = false;
+      });
+    } else {
+      DateTime activationDate = DateTime.parse(activationDateStr);
+      DateTime expiryDate = activationDate.add(const Duration(days: 30));
+      
+      // Check karo kya aaj ki date expiry date ke baad ki hai?
+      if (DateTime.now().isAfter(expiryDate)) {
+        setState(() {
+          _isExpired = true;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isExpired = false;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.amber),
+        ),
+      );
+    }
+
+    // Agar membership khatam ho gayi hai, toh MembershipScreen dikhao, nahi toh Welcome/Home screen
+    if (_isExpired) {
+      return const MembershipScreen();
+    } else {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Text(
+            "Welcome to CDPENART (Membership Active)",
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+        ),
+      );
+    }
+  }
+}
