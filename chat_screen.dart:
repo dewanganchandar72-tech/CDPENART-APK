@@ -1,0 +1,181 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  final String time;
+
+  ChatMessage({required this.text, required this.isUser, required this.time});
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      text: json['text'],
+      isUser: json['isUser'],
+      time: json['time'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'text': text,
+      'isUser': isUser,
+      'time': time,
+    };
+  }
+}
+
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key});
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _controller = TextEditingController();
+  final List<ChatMessage> _messages = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChatHistory();
+  }
+
+  // Purane permanent records load karna
+  Future<void> _loadChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? savedChatsString = prefs.getString('permanent_trade_records');
+
+    if (savedChatsString != null) {
+      List<dynamic> decodedList = jsonDecode(savedChatsString);
+      setState(() {
+        _messages.clear();
+        _messages.addAll(
+          decodedList.map((item) => ChatMessage.fromJson(item)).toList(),
+        );
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Messages ko permanently save karna (No delete option)
+  Future<void> _saveChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<Map<String, dynamic>> jsonList =
+        _messages.map((msg) => msg.toJson()).toList();
+    await prefs.setString('permanent_trade_records', jsonEncode(jsonList));
+  }
+
+  void _sendMessage() {
+    if (_controller.text.trim().isEmpty) return;
+
+    final now = DateTime.now();
+    // Proper date aur time format taaki proof ke sath exact timestamp rahe
+    final timeString = "${now.day}/${now.month}/${now.year} - ${now.hour}:${now.minute.toString().padLeft(2, '0')}";
+
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: _controller.text.trim(),
+          isUser: true,
+          time: timeString,
+        ),
+      );
+      _controller.clear();
+    });
+
+    _saveChatHistory(); // Turant permanent local storage mein save ho jayega
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.grey[900],
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("CDPENART Secure Ledger", style: TextStyle(color: Colors.white, fontSize: 16)),
+            Text("Permanent Proof Records (Non-deletable)", style: TextStyle(color: Colors.amber, fontSize: 10)),
+          ],
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(12.0),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      return Align(
+                        alignment: message.isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4.0),
+                          padding: const EdgeInsets.all(12.0),
+                          decoration: BoxDecoration(
+                            color: message.isUser
+                                ? Colors.amber[800]
+                                : Colors.grey[850],
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                message.text,
+                                style: const TextStyle(color: Colors.white, fontSize: 16),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                message.time,
+                                style: const TextStyle(color: Colors.white60, fontSize: 9),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8.0),
+                  color: Colors.grey[900],
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _controller,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: "Enter buy/sell transaction details...",
+                            hintStyle: TextStyle(color: Colors.white54),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send, color: Colors.amber),
+                        onPressed: _sendMessage,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
